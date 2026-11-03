@@ -1,0 +1,22 @@
+# Render blueprint: in the Render dashboard choose New > Blueprint and point it at this repository.
+services:
+  - type: web
+    name: airhead
+    runtime: python
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: python server.py
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13.0"
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: AIRHEAD_ADMIN_TOKEN
+        generateValue: true
+      - key: AIRHEAD_DATA_DIR
+        value: /var/data
+    disk:
+      name: airhead-data
+      mountPath: /var/data
+      sizeGB: 1
