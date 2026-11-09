@@ -6,14 +6,15 @@ import random
 import secrets
 import time
 
+import questions
 import store
 from builtin import clean_avatar
-from questions import get_questions
 
 log = logging.getLogger("airhead.game")
 
-ROUNDS, STRIKES, QTIME, MAX_PLAYERS = 10, 3, 20, 8
+ROUNDS, QTIME, SECOND_TRY_S, MAX_PLAYERS = 10, 20, 15, 8
 SPIN_MS, REVEAL_S = 4.4, 5.5
+FINAL_NEED = 3  # with two players left, first to this many (or the round number, if higher) wins
 CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ"
 ROOM_IDLE_S = 300
 
@@ -40,11 +41,15 @@ class Room:
         self.qn = 0
         self.topic = self.sub = self.wheel = self.vote = self.tally = None
         self.q = self.deadline = self.rv = self.end = None
-        self.answers = {}
+        self.answers = {}    # seat -> wrong pick on the current try; a wrong pick locks you out until the next try
+        self.attempt = 1     # 1, or 2 for the second chance
+        self.gone = []       # answers taken away for the second chance
         self.votes = {}
         self.pool, self.asked = [], []
         self.fetching = None
-        self.source = None
+        self.mixed = False   # True once general knowledge questions were mixed in
+        self.first_pop = None  # seat whose head popped first this round (what knocked-out players bet on)
+        self.news = None     # what happened at the end of the last round, for the round screen
         self.timers = {}
         self.idle_since = None
         self.dead = False
@@ -76,7 +81,8 @@ class Room:
     def view(self, seat):
         g = {
             "ph": self.ph, "code": self.code, "you": seat, "host": self.host, "isHost": seat == self.host,
-            "round": self.round, "sub": self.sub, "source": self.source,
+            "round": self.round, "need": self.need(), "final": len(self.in_round()) == 2,
+            "sub": self.sub, "mixed": self.mixed,
             "topic": {"key": self.topic["key"], "name": self.topic["name"]} if self.topic else None,
             "players": [{**p, "on": p["p"] in self.conns} for p in self.players],
         }
@@ -88,13 +94,16 @@ class Room:
         if self.tally:
             g["tally"] = self.tally
         if self.q:
-            g["q"] = {"n": self.q["n"], "t": self.q["q"], "c": self.q["choices"],
+            g["q"] = {"n": self.q["n"], "id": self.q["id"], "t": self.q["q"], "c": self.q["choices"],
+                      "attempt": self.attempt, "gone": self.gone,
                       "dl": max(0, int((self.deadline - time.monotonic()) * 1000)) if self.ph == "q" else 0,
-                      "got": list(self.answers.keys()), "mine": self.answers.get(seat)}
+                      "locked": list(self.answers.keys()), "mine": self.answers.get(seat)}
         if self.rv:
             g["rv"] = self.rv
         if self.end:
             g["end"] = self.end
+        if self.news and self.ph == "ri":
+            g["news"] = self.news
         return g
 
     def broadcast(self):
@@ -150,7 +159,7 @@ class Room:
         t = msg.get("t")
         is_host = seat == self.host
         if t == "start" and is_host and self.ph == "lobby" and self.players:
-            topic = store.find(str(msg.get("topic", "")))
+            topic = store.find_topic(str(msg.get("topic", "")))
             if not topic:
                 return "That topic no longer exists."
             self.topic = topic
@@ -170,11 +179,19 @@ class Room:
             asyncio.ensure_future(self.begin())
         elif t == "round" and is_host and self.ph == "ri":
             self.start_round()
+        elif t == "bet" and self.ph == "ri":
+            # A knocked-out player bets on whose head pops first this round. Right = back in next round.
+            p, pick = self.player(seat), self.player(str(msg.get("p", "")))
+            if p and p["betting"] and pick and pick["s"] != "elim":
+                p["bet"] = pick["p"]
         elif t == "answer" and self.ph == "q":
             p, i = self.player(seat), msg.get("i")
             if p and p["s"] == "playing" and msg.get("n") == self.q["n"] and seat not in self.answers \
-                    and isinstance(i, int) and 0 <= i < 4:
-                self.answers[seat] = i
+                    and isinstance(i, int) and 0 <= i < 4 and i not in self.gone:
+                if i == self.q["correct"]:
+                    self.score(p)       # first right answer takes the point; reveal() broadcasts
+                    return None
+                self.answers[seat] = i  # wrong: locked out until the next try
                 self.check_progress()
         elif t == "next" and is_host and self.ph == "rv":
             self.next_question()
@@ -195,7 +212,7 @@ class Room:
         elif self.ph == "q":
             here = [p for p in self.connected_players() if p["s"] == "playing"]
             if all(p["p"] in self.answers for p in here):
-                self.reveal()
+                self.end_try()
 
     def spin(self):
         w = self.wheel
@@ -235,7 +252,7 @@ class Room:
     async def begin(self):
         self.sub = self.vote["opts"][self.tally["win"]]
         self.ph, self.round = "load", 1
-        self.pool, self.asked = [], []
+        self.pool, self.asked, self.mixed = [], [], False
         self.broadcast()
         await self.ensure_pool(1)
         if self.dead:
@@ -243,7 +260,8 @@ class Room:
         if not self.pool:
             return self.finish("empty", [])
         for p in self.players:
-            p.update(s="playing", c=0, k=0, t=0, r=1)
+            p.update(s="playing", c=0, t=0, r=1, bet=None, betting=False)
+        self.news = None
         self.ph = "ri"
         self.broadcast()
         asyncio.ensure_future(self.ensure_pool(8))
@@ -259,17 +277,16 @@ class Room:
             self.fetching = None
 
     async def _refill(self):
-        qs, source = await get_questions(self.topic["name"], self.sub, self.round, self.asked)
-        if source == "bank" and self.source == "claude":
-            log.info("room %s switched to the built-in question bank", self.code)
-        self.source = source if self.source != "bank" else "bank"
         have = {q["q"] for q in self.pool} | set(self.asked)
-        self.pool.extend(q for q in qs if q["q"] not in have)
+        qs, info = questions.draw(self.topic["key"], self.sub, self.round, list(have))
+        self.mixed = self.mixed or info["bank"] > 0
+        self.pool.extend(qs)
 
     def start_round(self):
         for p in self.players:
-            if p["s"] not in ("elim",):
-                p.update(s="playing", c=0, k=0, r=self.round)
+            if p["s"] != "elim":
+                p.update(s="playing", c=0, r=self.round)
+        self.first_pop = None
         asyncio.ensure_future(self.ask())
 
     async def ask(self):
@@ -287,59 +304,94 @@ class Room:
         self.asked.append(q["q"])
         self.qn += 1
         self.q = {**q, "n": self.qn}
-        self.answers, self.rv = {}, None
+        self.answers, self.rv, self.attempt, self.gone = {}, None, 1, []
         self.deadline = time.monotonic() + QTIME
         self.ph = "q"
-        self.later("q", QTIME + 1, self.reveal)
+        self.later("q", QTIME + 1, self.end_try)
         self.broadcast()
         self.check_progress()
 
-    def reveal(self):
+    def score(self, p):
+        """p answered first and right: they get the point and the question ends."""
+        p["c"] += 1
+        p["t"] += 1
+        if p["c"] >= self.need():
+            p["s"] = "passed"
+            if self.first_pop is None:
+                self.first_pop = p["p"]
+        self.reveal(winner=p["p"])
+
+    def end_try(self):
+        """Nobody got it this try: everyone who tried was wrong, or time ran out."""
         if self.dead or self.ph != "q":
             return
         self.cancel("q")
-        for p in self.players:
-            if p["s"] != "playing":
-                continue
-            if self.answers.get(p["p"]) == self.q["correct"]:
-                p["c"] += 1
-                p["t"] += 1
-                if p["c"] >= self.round:
-                    p["s"] = "passed"
-            else:
-                p["k"] += 1
-                if p["k"] >= STRIKES:
-                    p["s"] = "out"
+        if self.attempt == 1:
+            # Second chance: take away the answers people guessed wrong and let everyone try again.
+            self.attempt = 2
+            self.gone = sorted(set(self.answers.values()))
+            self.answers = {}
+            self.deadline = time.monotonic() + SECOND_TRY_S
+            self.later("q", SECOND_TRY_S + 1, self.end_try)
+            self.broadcast()
+            self.check_progress()
+        else:
+            self.reveal(winner=None)
+
+    def reveal(self, winner):
+        self.cancel("q")
         self.ph = "rv"
-        self.rv = {"c": self.q["correct"], "a": dict(self.answers)}
+        self.rv = {"c": self.q["correct"], "winner": winner, "a": dict(self.answers)}
         self.later("rv", REVEAL_S, self.next_question)
         self.broadcast()
+
+    def in_round(self):
+        return [p for p in self.players if p["s"] != "elim"]
+
+    def need(self):
+        """Right answers to pop this round. The final two race to at least FINAL_NEED, so it's not one question."""
+        if len(self.in_round()) == 2:
+            return max(self.round, FINAL_NEED)
+        return self.round
 
     def next_question(self):
         if self.dead or self.ph != "rv":
             return
         self.cancel("rv")
-        if any(p["s"] == "playing" for p in self.players):
-            asyncio.ensure_future(self.ask())
-        else:
+        unpopped = [p for p in self.in_round() if p["s"] == "playing"]
+        # The round ends when one head is left unpopped (or, playing alone, when yours pops).
+        if len(unpopped) <= (1 if len(self.in_round()) > 1 else 0):
             self.end_round()
+        else:
+            asyncio.ensure_future(self.ask())
 
     def end_round(self):
-        in_round = [p for p in self.players if p["s"] in ("passed", "out")]
-        passed = [p for p in in_round if p["s"] == "passed"]
-        for p in in_round:
-            if p["s"] == "out":
-                p["s"] = "elim"
-        multi = len(self.players) > 1
-        if not passed:
-            if not multi:
-                return self.finish("solo-out", [])
-            best = max([p["c"] for p in in_round] or [0])
-            return self.finish("all-out", [p for p in in_round if p["c"] == best])
+        self.news = {"first": self.first_pop, "back": [], "wrong": [], "out": []}
+        # Settle bets: anyone who picked the first head to pop comes back next round.
+        back = []
+        for p in self.players:
+            if p["betting"]:
+                (back if p["bet"] and p["bet"] == self.first_pop else self.news["wrong"]).append(p)
+                p.update(betting=False, bet=None)
+        self.news["back"] = [p["p"] for p in back]
+        self.news["wrong"] = [p["p"] for p in self.news["wrong"]]
+        alive = self.in_round()
+        if len(alive) > 1:
+            # The last unpopped head is out. They get a bet on the next round, unless this was the
+            # final two (or there's no round after the next one to come back for).
+            can_bet = len(alive) > 2 and self.round + 1 < ROUNDS
+            for p in alive:
+                if p["s"] == "playing":
+                    p["s"] = "elim"
+                    p["betting"] = can_bet
+                    self.news["out"].append(p["p"])
+            for p in back:
+                p["s"] = "playing"
+            alive = self.in_round()
+            if len(alive) <= 1:
+                return self.finish("last", alive)
         if self.round >= ROUNDS:
-            return self.finish("cleared", passed)
-        if multi and len(passed) == 1:
-            return self.finish("last", passed)
+            return self.finish("cleared", alive)
         self.round += 1
         self.ph = "ri"
         self.broadcast()
@@ -355,7 +407,7 @@ class Room:
             self.cancel(name)
         self.ph, self.round = "lobby", 0
         self.topic = self.sub = self.wheel = self.vote = self.tally = self.q = self.rv = self.end = None
-        self.pool, self.asked, self.source = [], [], None
+        self.pool, self.asked, self.mixed = [], [], False
         self.players = [new_player(p["p"], p["n"], p["av"]) for p in self.players if p["p"] in self.conns]
         for seat in self.conns:
             if not self.player(seat) and len(self.players) < MAX_PLAYERS:
@@ -364,7 +416,7 @@ class Room:
 
 
 def new_player(seat, name, av):
-    return {"p": seat, "n": name, "av": av, "s": "playing", "c": 0, "k": 0, "t": 0, "r": 1}
+    return {"p": seat, "n": name, "av": av, "s": "playing", "c": 0, "k": 0, "t": 0, "r": 1, "bet": None, "betting": False}
 
 
 async def _send(ws, data):

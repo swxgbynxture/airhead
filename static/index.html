@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Airhead</title>
+<meta name="description" content="A trivia party game for 1 to 8 players. Spin for subtopics, vote, and answer more questions each round as your head swells until it pops.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="shell">
+
+<!-- HOME -->
+<section id="scr-home" class="screen" aria-label="Main menu">
+  <div class="shell">
+    <header class="brand">
+      <div class="logo" aria-label="Airhead">Airhe<span class="bal" aria-hidden="true"></span>d</div>
+      <p class="tagline">Trivia that goes straight to your head. Get it right and watch it swell.</p>
+    </header>
+
+    <section id="dailyCard" class="daily" aria-label="Daily game">
+      <div id="dailyAv" class="daily-av"></div>
+      <div class="daily-body">
+        <div class="eyebrow" id="dailyEyebrow">Daily Airhead</div>
+        <h2 id="dailyTitle">Today's game</h2>
+        <p id="dailySub">Everyone gets the same questions today, mixed from every topic. You get one try.</p>
+        <div class="row">
+          <button id="dailyPlay" class="btn primary">Play today's game</button>
+          <span id="dailyStreak" class="streak" hidden></span>
+        </div>
+      </div>
+    </section>
+
+    <div class="lineup">
+      <div>
+        <div class="eyebrow">Players</div>
+        <div id="lineupCount" style="font-weight:800"></div>
+      </div>
+      <div id="lineupAvs" class="lineup-avs"></div>
+      <button id="editPlayers" class="btn small">Edit players &amp; avatars</button>
+      <button id="playOnline" class="btn small primary">Play online</button>
+    </div>
+
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tabTopics" aria-selected="true" aria-controls="paneTopics">Topics</button>
+      <button role="tab" id="tabCommunity" aria-selected="false" aria-controls="paneCommunity">Community</button>
+    </div>
+
+    <div id="paneTopics" role="tabpanel" class="shell">
+      <div class="spread"><h2>Pick a topic</h2><span class="muted">The wheel picks the subtopics.</span></div>
+      <div id="topicGrid" class="tgrid"></div>
+      <div class="spread"><h2>Community-made</h2><button id="goCommunity" class="btn small ghost">Write questions or suggest a topic</button></div>
+      <div id="communityGrid" class="tgrid"></div>
+      <p id="communityEmpty" class="note" hidden></p>
+
+      <section class="how" aria-label="How to play">
+        <h3>How a game works</h3>
+        <ol>
+          <li>Choose a topic. Spin the wheel 5 times for subtopics (3 spins with 1–2 players).</li>
+          <li>Everyone votes on one subtopic to play.</li>
+          <li>Ten rounds. Round 1 needs 1 right answer, round 2 needs 2, and so on up to 10.</li>
+          <li>Every right answer inflates your head. Hit the round's target and it pops: you're through. Three misses in a round and you're out.</li>
+        </ol>
+        <p class="muted">Picking a topic here starts a game on this device, passed around. Choose <b>Play online</b> to give everyone their own device. Online, all players answer the same question at once.</p>
+      </section>
+    </div>
+
+    <div id="paneCommunity" role="tabpanel" hidden class="shell">
+      <p id="cloudNote" class="note">Connecting to community topics…</p>
+      <div><h2>Write questions</h2><p class="muted">Every question in Airhead is written by players. Pick a topic and subtopic, then write a question with one right answer and three wrong ones. It goes into games straight away. A question that 3 players report is taken out of games.</p></div>
+      <div class="cgrid">
+        <form id="questionForm" class="panel" novalidate>
+          <div class="field"><label for="qTopic">Topic</label><select id="qTopic"></select></div>
+          <div class="field"><label for="qSub">Subtopic</label><select id="qSub"></select></div>
+          <div class="field"><label for="qWrite">Question</label><textarea id="qWrite" rows="2" maxlength="200" placeholder="Which planet has the most moons?"></textarea></div>
+          <div class="field"><label for="qAnswer">Right answer</label><input type="text" id="qAnswer" maxlength="80" class="right-in" placeholder="Saturn"></div>
+          <div class="field"><label for="qWrong1">Wrong answers</label>
+            <input type="text" id="qWrong1" maxlength="80" placeholder="Jupiter" aria-label="Wrong answer 1">
+            <input type="text" id="qWrong2" maxlength="80" placeholder="Uranus" aria-label="Wrong answer 2">
+            <input type="text" id="qWrong3" maxlength="80" placeholder="Neptune" aria-label="Wrong answer 3"></div>
+          <div class="field"><label for="qLevel">Difficulty</label>
+            <select id="qLevel"><option value="1">Easy: most people know it</option><option value="2">Medium: fans of the subject know it</option><option value="3">Hard: experts only</option></select></div>
+          <button class="btn primary" type="submit" id="qSubmit">Add question</button>
+          <p id="qMsg" class="formmsg" role="status"></p>
+        </form>
+        <div class="shell" style="gap:12px">
+          <div><h3>Your questions</h3><p id="qCountNote" class="muted"></p></div>
+          <div id="myQuestions" class="shell" style="gap:8px"></div>
+        </div>
+      </div>
+      <div><h2>Suggest a topic</h2></div>
+      <div class="cgrid">
+        <form id="proposeForm" class="panel" novalidate>
+          <h3>Suggest a topic</h3>
+          <div class="field"><label for="cName">Topic name</label><input type="text" id="cName" maxlength="40" placeholder="Space Missions"></div>
+          <div class="field"><label for="cBlurb">One-line description</label><input type="text" id="cBlurb" maxlength="120" placeholder="Rockets, rovers and the people who flew them"></div>
+          <div class="field"><label for="cSubs">Wheel subtopics (5 to 12, one per line or separated by commas)</label>
+            <textarea id="cSubs" rows="6" placeholder="Apollo Program&#10;Mars Rovers&#10;Space Stations&#10;Famous Astronauts&#10;Rocket Science"></textarea></div>
+          <button class="btn primary" type="submit" id="cSubmit">Submit for votes</button>
+          <p id="cMsg" class="formmsg" role="status"></p>
+        </form>
+        <div class="shell" style="gap:12px">
+          <div><h3>Vote topics onto the menu</h3><p class="muted">A topic joins the main menu once it has <b>3 votes</b> from other players.</p></div>
+          <div id="proposalList" class="shell" style="gap:10px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PLAYERS -->
+<section id="scr-players" class="screen" hidden aria-label="Players">
+  <div class="shell">
+    <div class="spread"><h2>Players &amp; avatars</h2><button id="playersDone" class="btn primary">Done</button></div>
+    <p class="muted">1 to 8 players, passing one device around. Tap a player to customize them.</p>
+    <div id="pgrid" class="pgrid"></div>
+    <div class="panel">
+      <div class="editor">
+        <div class="preview"><div id="edPreview" class="avwrap"></div></div>
+        <div class="opts">
+          <div class="field"><label for="pName">Name</label><input type="text" id="pName" maxlength="14"></div>
+          <div id="edOpts" class="opts"></div>
+          <div class="row"><button id="edRandom" class="btn small">Randomize</button><button id="edRemove" class="btn small ghost">Remove player</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- WHEEL -->
+<section id="scr-wheel" class="screen" hidden aria-label="Spin the wheel">
+  <div class="shell">
+    <div class="spread"><div><div class="eyebrow" id="wheelEyebrow"></div><h2 id="wheelTitle">Spin the wheel</h2></div><button class="btn small ghost" data-home>Main menu</button></div>
+    <div class="wheelzone">
+      <div class="wheelbox">
+        <svg class="pointer" viewBox="0 0 34 44" aria-hidden="true"><path d="M3 3 H31 L17 41Z" fill="var(--coral)" stroke="var(--edge)" stroke-width="4" stroke-linejoin="round"/></svg>
+        <canvas id="wheel" width="420" height="420" aria-label="Subtopic wheel"></canvas>
+        <div class="hub" id="hub">SPIN</div>
+      </div>
+      <div class="shell" style="gap:14px">
+        <div id="slots" class="slots"></div>
+        <div class="row"><button id="spinBtn" class="btn primary">Spin</button><button id="toVote" class="btn" hidden>Vote on a subtopic</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- VOTE -->
+<section id="scr-vote" class="screen" hidden aria-label="Vote">
+  <div class="shell">
+    <div class="spread"><div><div class="eyebrow" id="voteEyebrow"></div><h2 id="voteTitle">Vote for a subtopic</h2></div><button class="btn small ghost" data-home>Main menu</button></div>
+    <div id="voteBody" class="shell" style="gap:12px"></div>
+  </div>
+</section>
+
+<!-- LOADING -->
+<section id="scr-load" class="screen" hidden aria-label="Loading">
+  <div class="loading">
+    <div class="floaty" aria-hidden="true"></div>
+    <h2 id="loadTitle">Inflating questions…</h2>
+    <p id="loadSub" class="muted"></p>
+    <button class="btn small ghost" data-home>Cancel</button>
+  </div>
+</section>
+
+<!-- ROUND INTRO -->
+<section id="scr-round" class="screen" hidden aria-label="Round">
+  <div class="shell">
+    <div class="roundhero">
+      <div class="eyebrow" id="roundEyebrow"></div>
+      <div class="roundnum" id="roundNum">1</div>
+      <h2 id="roundRule"></h2>
+      <p class="muted" id="roundNote">Three misses in this round and your head deflates. You're out.</p>
+      <div class="pips" id="roundPips" aria-hidden="true"></div>
+    </div>
+    <p id="roundNews" class="roundnews" hidden></p>
+    <div id="roundBet" class="betbox" hidden>
+      <h3>You're out, but you get one more chance</h3>
+      <p class="muted">Guess whose head pops first this round. Get it right and you're back in next round.</p>
+      <div id="roundBetPicks" class="betpicks"></div>
+    </div>
+    <div id="roundCrowd" class="crowd"></div>
+    <div class="row" style="justify-content:center"><button id="roundGo" class="btn primary">Start round</button><p id="roundWait" class="note" hidden>Waiting for the host to start the round…</p></div>
+    <p id="roundBetWait" class="note" style="text-align:center" hidden></p>
+  </div>
+</section>
+
+<!-- PLAY -->
+<section id="scr-play" class="screen" hidden aria-label="Question">
+  <div class="shell">
+    <div class="topbar">
+      <div class="where"><span id="pRound"></span> · <span id="pSub" class="muted"></span></div>
+      <button id="quitBtn" class="btn small ghost">Quit game</button>
+    </div>
+    <div class="play">
+      <div class="stage">
+        <div id="stageAv" class="avwrap"></div>
+        <div class="who" id="whoName"></div>
+        <div class="prog"><span id="progTxt"></span><span class="strikes" id="strikes"></span></div>
+      </div>
+      <div class="shell" style="gap:16px">
+        <div class="qcard">
+          <div class="timer" id="timer"><i id="timerBar"></i></div>
+          <div class="eyebrow" id="qTag" hidden></div>
+          <div class="qtext" id="qText"></div>
+          <div class="choices" id="choices"></div>
+          <div class="spread"><div class="feedback" id="feedback" role="status"></div><button id="nextBtn" class="btn primary" hidden>Next</button></div>
+          <button id="reportBtn" class="linkbtn" hidden>Report a problem with this question</button>
+        </div>
+        <div><div class="eyebrow" style="margin-bottom:6px">This round</div><div id="others" class="others"></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- END -->
+<section id="scr-end" class="screen" hidden aria-label="Results">
+  <div class="shell" style="align-items:center;text-align:center">
+    <div class="eyebrow" id="endEyebrow"></div>
+    <h1 id="endTitle" style="font-size:clamp(2.2rem,7vw,3.6rem)"></h1>
+    <p id="endSub" class="muted"></p>
+    <div id="podium" class="podium"></div>
+    <div id="dailyBox" class="dailybox" hidden>
+      <div class="stats" id="dailyStats"></div>
+      <p id="dailyBeat" class="muted"></p>
+      <pre id="shareText" class="share"></pre>
+      <div class="row" style="justify-content:center">
+        <button id="shareBtn" class="btn primary">Share result</button>
+      </div>
+      <p class="muted">Next Airhead in <b id="countdown" class="tabular">--:--:--</b></p>
+    </div>
+    <div id="board" class="board"></div>
+    <div class="row" style="justify-content:center">
+      <button id="keepGoing" class="btn primary" hidden>Keep going solo</button>
+      <button id="againBtn" class="btn">Play this topic again</button>
+      <button id="writeBtn" class="btn">Write questions for this topic</button>
+      <button class="btn ghost" data-home>Main menu</button>
+    </div>
+  </div>
+</section>
+
+<!-- ONLINE: ENTRY -->
+<section id="scr-online" class="screen" hidden aria-label="Play online">
+  <div class="shell">
+    <div class="spread"><h2>Play online</h2><button class="btn small ghost" data-home>Main menu</button></div>
+    <p class="muted">Everyone plays on their own device. Questions go to all players at once and everyone answers together.</p>
+    <div class="lineup">
+      <div><div class="eyebrow">Playing as</div><div class="muted" style="font-size:.85rem">your first player</div></div>
+      <div id="oMe" class="lineup-avs"></div>
+      <button id="oEdit" class="btn small">Change avatar</button>
+    </div>
+    <div class="cgrid">
+      <div class="panel">
+        <h3>Host a game</h3>
+        <p class="muted">You get a code to share. You pick the topic and spin the wheel. Up to 8 players.</p>
+        <button id="oHost" class="btn primary">Create a game</button>
+      </div>
+      <form id="oJoinForm" class="panel" novalidate>
+        <h3>Join a game</h3>
+        <div class="field"><label for="oCode">Game code</label>
+          <input type="text" id="oCode" class="codein" maxlength="4" autocomplete="off" placeholder="ABCD"></div>
+        <button id="oJoin" class="btn primary" type="submit">Join</button>
+      </form>
+    </div>
+    <p id="oMsg" class="formmsg" role="status"></p>
+  </div>
+</section>
+
+<!-- ONLINE: LOBBY -->
+<section id="scr-lobby" class="screen" hidden aria-label="Game lobby">
+  <div class="shell">
+    <div class="spread">
+      <div><div class="eyebrow">Online game · <span id="lCount"></span></div><h2>Game code <span id="lCode" class="code"></span></h2></div>
+      <button class="btn small ghost" data-home>Leave</button>
+    </div>
+    <p class="muted">Friends open Airhead, choose <b>Play online</b>, and enter this code.</p>
+    <div id="lPlayers" class="crowd"></div>
+    <div id="lHost" class="panel">
+      <div class="field"><label for="lTopic">Topic</label><select id="lTopic"></select></div>
+      <div class="row"><button id="lStart" class="btn primary">Spin the wheel</button></div>
+    </div>
+    <p id="lWait" class="note">Waiting for the host to pick a topic…</p>
+  </div>
+</section>
+
+<!-- ONLINE: WHEEL -->
+<section id="scr-owheel" class="screen" hidden aria-label="Spin the wheel">
+  <div class="shell">
+    <div class="spread"><div><div class="eyebrow" id="owEyebrow"></div><h2 id="owTitle">Spin the wheel</h2></div><button class="btn small ghost" data-home>Leave game</button></div>
+    <div class="wheelzone">
+      <div class="wheelbox">
+        <svg class="pointer" viewBox="0 0 34 44" aria-hidden="true"><path d="M3 3 H31 L17 41Z" fill="var(--coral)" stroke="var(--edge)" stroke-width="4" stroke-linejoin="round"/></svg>
+        <canvas id="owheel" width="420" height="420" aria-label="Subtopic wheel"></canvas>
+        <div class="hub" id="owHub"></div>
+      </div>
+      <div class="shell" style="gap:14px">
+        <div id="owSlots" class="slots"></div>
+        <div class="row"><button id="owSpin" class="btn primary">Spin</button><p id="owWait" class="note">The host is spinning the wheel.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ONLINE: VOTE -->
+<section id="scr-ovote" class="screen" hidden aria-label="Vote">
+  <div class="shell">
+    <div class="spread"><div><div class="eyebrow" id="ovEyebrow"></div><h2 id="ovTitle">Vote for a subtopic</h2></div><button class="btn small ghost" data-home>Leave game</button></div>
+    <div id="ovBody" class="shell" style="gap:14px"></div>
+  </div>
+</section>
+
+<!-- ONLINE: PLAY -->
+<section id="scr-oplay" class="screen" hidden aria-label="Question">
+  <div class="shell">
+    <div class="topbar">
+      <div class="where"><span id="opRound"></span> · <span id="opSub" class="muted"></span></div>
+      <button class="btn small ghost" data-home>Leave game</button>
+    </div>
+    <div class="play">
+      <div class="stage">
+        <div id="opStage" class="avwrap"></div>
+        <div class="who" id="opWho"></div>
+        <div class="prog"><span id="opProg"></span><span class="strikes" id="opStrikes"></span></div>
+      </div>
+      <div class="shell" style="gap:16px">
+        <div class="qcard">
+          <div class="timer" id="opTimer"><i id="opTimerBar"></i></div>
+          <div class="qtext" id="opQ"></div>
+          <div class="choices" id="opChoices"></div>
+          <div class="spread"><div class="feedback" id="opFb" role="status"></div><button id="opNext" class="btn primary" hidden>Next question</button></div>
+          <button id="opReport" class="linkbtn" hidden>Report a problem with this question</button>
+        </div>
+        <div><div class="eyebrow" style="margin-bottom:6px">Everyone</div><div id="opCrowd" class="others"></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</div>
+<div id="toast" role="status" hidden></div>
+<script src="/static/app.js"></script>
+</body>
+</html>
