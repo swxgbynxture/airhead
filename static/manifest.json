@@ -1,0 +1,14 @@
+{
+  "name": "Airhead",
+  "short_name": "Airhead",
+  "description": "Daily trivia that goes straight to your head. Play with friends online.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F3EEFF",
+  "theme_color": "#F3EEFF",
+  "icons": [
+    {"src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png"},
+    {"src": "/static/icon.svg", "sizes": "any", "type": "image/svg+xml"}
+  ]
+}

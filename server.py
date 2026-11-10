@@ -69,8 +69,21 @@ async def revalidate_static(request, handler):
     return resp
 
 
+HOST_RE = re.compile(r"^[A-Za-z0-9.-]+(:\d{1,5})?$")
+
+
+def site_origin(request):
+    """This site's address as visitors see it (Render's proxy passes the original https scheme along)."""
+    scheme = request.headers.get("X-Forwarded-Proto", request.scheme).split(",")[0].strip()
+    host = request.host if HOST_RE.match(request.host or "") else "localhost"
+    return f"{'https' if scheme == 'https' else 'http'}://{host}"
+
+
 async def index(request):
-    return web.FileResponse(os.path.join(STATIC, "index.html"), headers={"Cache-Control": "no-cache"})
+    # Link previews need full addresses for the page and its preview image, so fill in the origin.
+    with open(os.path.join(STATIC, "index.html"), encoding="utf-8") as f:
+        page = f.read().replace("__ORIGIN__", site_origin(request))
+    return web.Response(text=page, content_type="text/html", headers={"Cache-Control": "no-cache"})
 
 
 async def health(request):

@@ -5,6 +5,22 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Airhead</title>
 <meta name="description" content="A trivia party game for 1 to 8 players. Spin for subtopics, vote, and answer more questions each round as your head swells until it pops.">
+<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+<link rel="icon" href="/static/icon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+<link rel="manifest" href="/static/manifest.json">
+<meta name="theme-color" content="#F3EEFF">
+<!-- Link previews (iMessage, Discord, X, Facebook…). The server fills in __ORIGIN__ with this site's address. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Airhead">
+<meta property="og:title" content="Airhead: daily trivia that goes straight to your head">
+<meta property="og:description" content="A new trivia game every day. Every right answer inflates your head until it pops. Play solo or race up to 7 friends online.">
+<meta property="og:url" content="__ORIGIN__/">
+<meta property="og:image" content="__ORIGIN__/static/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The Airhead logo and three cartoon players whose heads get bigger, with a POP! burst">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap">
@@ -276,7 +292,10 @@
       <div><div class="eyebrow">Online game · <span id="lCount"></span></div><h2>Game code <span id="lCode" class="code"></span></h2></div>
       <button class="btn small ghost" data-home>Leave</button>
     </div>
-    <p class="muted">Friends open Airhead, choose <b>Play online</b>, and enter this code.</p>
+    <div class="invite">
+      <p class="muted">Send friends the invite link, or they can open Airhead, choose <b>Play online</b>, and enter this code.</p>
+      <button id="lInvite" class="btn">Copy invite link</button>
+    </div>
     <div id="lPlayers" class="crowd"></div>
     <div id="lHost" class="panel">
       <div class="field"><label for="lTopic">Topic</label><select id="lTopic"></select></div>

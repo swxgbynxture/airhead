@@ -737,7 +737,8 @@ function shareText(h){
     return `R${i+1} ${r.map(ok => ok ? '🟩' : '🟥').join('')}${popped ? ' 💥' : ''}`;
   });
   const head = `Airhead #${h.number} · ${h.cleared ? 'Cleared all 10 rounds' : 'Round ' + h.round} · ${h.total} right`;
-  return [head, ...rows, location.origin].join('\n');
+  const dare = h.cleared ? 'I cleared all 10. Can you?' : `Can you beat round ${h.round}?`;
+  return [head, ...rows, '', dare, location.origin].join('\n');
 }
 async function finishDaily(reason){
   const p = game.players[0], today = game.date;
@@ -873,12 +874,35 @@ function renderLobby(g){
   $('#lWait').textContent = myPl(g) ? 'You\'re in. Waiting for the host to pick a topic…' : 'This game is full (8 players). You can watch.';
   if(g.isHost){
     const sel = $('#lTopic'), all = [...TOPICS, ...addedCommunity()], cur = sel.value;
-    sel.innerHTML = all.map(t => `<option value="${esc(t.key)}">${esc(t.name)}${t.key.startsWith('c:') ? ' (community)' : ''}: ${countLabel(t.key).toLowerCase()}</option>`).join('');
+    sel.innerHTML = all.map(t => `<option value="${esc(t.key)}">${esc(t.name)}${t.key.startsWith('c:') ? ' (community)' : ''}${countLabel(t.key)}</option>`).join('');
     if(all.some(t => t.key === cur)) sel.value = cur;
   }
   show('scr-lobby');
 }
 $('#lStart').onclick = () => send({t:'start', topic:$('#lTopic').value});
+const inviteLink = code => `${location.origin}/?join=${code}`;
+$('#lInvite').onclick = async () => {
+  if(!online || !online.code) return;
+  const url = inviteLink(online.code), text = `Play Airhead with me! Game code ${online.code}`;
+  if(navigator.share && matchMedia('(pointer: coarse)').matches){
+    try{ await navigator.share({title:'Airhead', text, url}); return; }catch(e){ if(e && e.name === 'AbortError') return; }
+  }
+  try{ await navigator.clipboard.writeText(url); toast('Invite link copied. Paste it to your friends.'); }
+  catch(e){ toast(`Share this link: ${url}`); }
+};
+// Opened from an invite link (/?join=ABCD): go to Play online with the code filled in.
+// Joining is still one tap, so people can set their name and avatar first.
+function openInvite(){
+  const params = new URLSearchParams(location.search), code = (params.get('join') || '').toUpperCase().replace(/[^A-Z]/g, '');
+  if(!code) return;
+  history.replaceState(null, '', location.pathname);
+  if(code.length !== 4) return;
+  renderOnlineEntry();
+  $('#oCode').value = code;
+  $('#oMsg').className = 'formmsg'; $('#oMsg').textContent = `You're invited to game ${code}. Check your name and avatar, then tap Join.`;
+  show('scr-online');
+  $('#oJoin').focus();
+}
 $('#owSpin').onclick = () => send({t:'spin'});
 function renderOWheel(g){
   const w = g.wheel;
@@ -1129,6 +1153,7 @@ function renderOEnd(g){
 /* ---------- boot ---------- */
 renderLineup(); renderTopics(); renderCommunity(); renderDailyCard();
 loadTopics();
+openInvite();
 loadDaily().then(renderDailyCard).catch(() => {});
 // A new day may have started while the page sat open.
 document.addEventListener('visibilitychange', () => { if(!document.hidden && !$('#scr-home').hidden) renderDailyCard(); });
